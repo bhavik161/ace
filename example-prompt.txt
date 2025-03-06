@@ -1,0 +1,7 @@
+change upb by 400 for next 3 months
+
+shift loan schedule first payment due date by reducing 5 month
+
+
+
+change upb by 500 for next 3 months where loan id is 168980
