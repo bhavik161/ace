@@ -8,24 +8,29 @@ if user_input:
     response = f"Response to: {user_input}"  # replace with your real logic
     st.write(response)
 
-    # Initialize state variables
+    # Initialize state
     if "button_clicked" not in st.session_state:
         st.session_state.button_clicked = None
 
-    # Show prompt only if no button was clicked yet
+    # Handlers to update state
+    def click_yes():
+        st.session_state.button_clicked = "yes"
+
+    def click_no():
+        st.session_state.button_clicked = "no"
+
+    # Show buttons only if nothing was clicked yet
     if st.session_state.button_clicked is None:
         st.write("Do you want to do additional processing?")
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("Yes"):
-                st.session_state.button_clicked = "yes"
+            st.button("Yes", on_click=click_yes)
         with col2:
-            if st.button("No"):
-                st.session_state.button_clicked = "no"
+            st.button("No", on_click=click_no)
 
-    # Handle button click logic
-    if st.session_state.button_clicked == "yes":
+    # Logic after button click
+    elif st.session_state.button_clicked == "yes":
         st.write("Doing additional processing...")
-        # Add your extra logic here
+        # Your extra logic here
     elif st.session_state.button_clicked == "no":
         st.write("Okay, ending here.")
