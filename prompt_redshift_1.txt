@@ -44,11 +44,16 @@ Key Requirements:
    - Use CTAS (CREATE TABLE AS) syntax compatible with Redshift
    - Verify the table was populated properly
 
+5. Intent Recognition for Projection Type:
+- If the input specifies a monthly projection (e.g., “reduce by 300 for 3 months”), generate one row per month using lp.temp_month_numbers.
+- If the input describes a one-time adjustment (e.g., “shift date by 5 months”), apply the change once and return only one row with month_number = 1.  Do not use temporary month table for one time adjustment
+
 IMPORTANT REQUIREMENT: DO NOT create a new "projected_balance" column. Instead, directly modify the existing ln_aqsn_upb_amt column in the output. The new ln_aqsn_upb_amt column should reflect the reduced balance for each month.
 
-Example Input/Output:
+## Example Inputs/Outputs:
 
-Input: "Show loan profile with 300 monthly reduction for next 3 months"
+### Example 1: Numeric Modification
+Input: "Show loan profile with 300 monthly reduction in ln_aqsn_upb_amt for next 3 months"
 Output:
 ```sql
 -- Drop existing table if it exists
@@ -62,13 +67,69 @@ INSERT INTO lp.temp_month_numbers VALUES (1), (2), (3);
 -- Create new table with all results
 CREATE TABLE lp.new_loan_profile AS
 SELECT 
-   <example statement>;
+    ln_id,
+    /* [all other columns listed here] */
+    -- Directly modify ln_aqsn_upb_amt based on month_number
+    ROUND(CASE
+      WHEN l.upb_amt - (m.month_number * 300) < 0 THEN 0
+      ELSE l.upb_amt - (m.month_number * 300)
+    END, 2) AS upb_amt,
+    /* [remaining columns listed here] */
+    m.month_number
+FROM 
+    lp.orig_lp l
+CROSS JOIN 
+    lp.temp_month_numbers m
+ORDER BY 
+    l.fnm_ln_id, m.month_number;
+```
 
--- Verify the table was populated with data
-SELECT COUNT(*) FROM lp.new_loan_profile;
+### Example 2: Date Modification
+Input: "Show loan profile with fst_pmt_due_dt increased by 1 month for each month in a 4 month projection"
+Output:
+```sql
+-- Drop existing table if it exists
+DROP TABLE IF EXISTS lp.new_loan_profile;
 
--- Clean up temp table
-DROP TABLE lp.temp_month_numbers;
+-- Create a temporary numbers table to simulate generate_series
+DROP TABLE IF EXISTS lp.temp_month_numbers;
+CREATE TABLE lp.temp_month_numbers (month_number INT);
+INSERT INTO lp.temp_month_numbers VALUES (1), (2), (3), (4);
+
+-- Create new table with all results
+CREATE TABLE lp.new_loan_profile AS
+SELECT 
+    ln_id,
+    /* [all other columns listed here] */
+    -- Directly modify fst_pmt_due_dt based on month_number
+    DATEADD(month, m.month_number, l.ln_schd_fst_pmt_due_dt) AS ln_schd_fst_pmt_due_dt,
+    /* [remaining columns listed here] */
+    m.month_number
+FROM 
+    lp.orig_lp l
+CROSS JOIN 
+    lp.temp_month_numbers m
+ORDER BY 
+    l.ln_id, m.month_number;
+```
+### Example 3: One-Time Date Shift
+Input: "Shift fst_pmt_due_dt by 5 months"  
+Output:
+```sql
+-- Drop existing table if it exists
+DROP TABLE IF EXISTS lp.new_loan_profile;
+
+-- Create new table with a single projection (one-time adjustment)
+CREATE TABLE lp.new_loan_profile AS
+SELECT 
+    fnm_ln_id,
+    /* [all other columns listed here] */
+    DATEADD(month, 5, l.fst_pmt_due_dt) AS ln_schd_fst_pmt_due_dt,
+    1 AS month_number
+FROM 
+    lp.orig_lp l
+ORDER BY 
+    l.fnm_ln_id;
 ```
 
 Additional Guidelines:
